@@ -1,0 +1,206 @@
+---
+title: "Data Science Capstone - Milestone Report"
+author: "Teppei Miyazaki"
+date: "12/19/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# setup
+setwd("~/Desktop/Coursera"); set.seed(0)
+library(tidyverse); library(quanteda); library(quanteda.textplots)
+library(ngram); library(textclean); library(sentimentr)
+```
+
+## Executive Summary
+- This report is a part of the Data Science Capstone course of Coursera.
+- The final goal of this course is to build an app which predicts the next word after taking a phrase as input.
+- In this milestone report, we explain exploratory analysis of the data set and our goals for the eventual app and algorithm.
+
+## Loading Data 
+- The data is obtained from the Coursera site [(link)](https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip) 
+- This data is from a corpus called HC Corpora and includes large text files from blogs, news, and twitter.
+- The file paths including the file name are shown below. Please note that the R code for this project is attached in the appendix.
+
+```{r loading_data, echo=FALSE}
+# loading_data
+processFile <- function(path){
+        txts <- scan(path, what = character(), 
+                     sep = "\n", blank.lines.skip = TRUE,
+                     skipNul = TRUE, quiet = TRUE)
+        return(txts)
+}
+
+file_paths <- list.files(path = "./Word-Prediction",
+                         pattern = "txt",
+                         full.names = TRUE)
+file_list <- lapply(file_paths, processFile)
+file_names <- c("blogs", "news", "twitter")
+names(file_list) <- file_names
+
+# file paths
+file_paths
+```
+
+## Exploratory Analysis
+- First, we look at the number of words/lines of the text files.
+- As you can see, these files have large amount of texts.
+
+### Word count of each file
+```{r wordcount, echo=FALSE}
+# wordcount
+wordcountFile <- function(file){
+        n <- wordcount(file)
+        n_sum <- sum(n, na.rm = TRUE)
+        return(n_sum)
+}
+wordcount_list <- lapply(file_list, wordcountFile)
+wordcount_list
+```
+
+### Line count of each file
+```{r linecount, echo=FALSE}
+# linecount
+linecount_list <- lapply(file_list, length)
+linecount_list
+```
+
+### Tokenization
+- Given the large size of data, we tokenize the 10% sample of data.
+- Overview of the token is shown below.
+
+```{r tokenize, echo=FALSE}
+# 10% sampling and tokenizing
+tokenizeFile <- function(files, p = 0.1){
+        docs <- unlist(files)
+        size <- length(docs) * p
+        docs <- sample(docs, size = size)
+        docs <- replace_non_ascii(docs)
+        corp <- corpus(docs)
+        toks <- tokens(corp, remove_punct = TRUE)
+        
+        # removing bad words
+        pwords <- lexicon::profanity_alvarez
+        toks <- tokens_remove(toks, pattern = pwords)
+        return(toks)
+}
+
+toks <- tokenizeFile(file_list, p = 0.1)
+toks
+```
+
+### Document-feature matrix
+- Then, we construct a document-feature matrix.
+- Here, we show the first 6 words and the last 6 words of the top 1000 words.
+- As you can see, the top 1,000 words cover approximately 70% of all words instances.
+- We plot frequency of words below and you can see that top words accounts for large proportion of data.
+- We also plot a word cloud of the data using textplot_wordcloud() function.
+
+```{r dfmat, echo=FALSE}
+# constructing a document-feature matrix
+dfmat <- dfm(toks)
+topwords <- topfeatures(dfmat, 1000)
+df1 <- data.frame(topwords) %>%
+        mutate(proportion = topwords/sum(dfmat)) %>%
+        mutate(cum_sum = cumsum(proportion))
+head(df1); tail(df1) # Top 1000 words cover 70% of all words instances
+plot(topwords, main = "Top 1,000 Word Count")
+textplot_wordcloud(dfmat, min_count = 1000)
+```
+
+### n-grams (n = 2)
+- Finally, we generate n-grams using tokens_ngrams() function.
+- Given the large size of data, we generate bigram only.
+- The frequency of bigrams look similar to the previous plot and top bigrams account for large portion of data.
+
+```{r ngram, echo=FALSE}
+# generating n-grams (n = 2)
+toks_ngrams <- tokens_ngrams(toks, n = 2)
+dfmat_ngrams <- dfm(toks_ngrams)
+topngrams <- topfeatures(dfmat_ngrams, 1000)
+df2 <- data.frame(topngrams) %>%
+        mutate(proportion = topngrams/sum(dfmat_ngrams)) %>%
+        mutate(cum_sum = cumsum(proportion))
+head(df2); tail(df2)
+plot(topngrams, main = "Top 1,000 Bigram Count")
+```
+
+## Next Steps
+- The final goal of this project is to create the prediction algorithm and Shiny app.
+- The application takes a phrase as input, and it predicts the next word.
+- As a next step, we would like to work on n-gram model for predicting the next word based on the previous words.
+
+## Appendix: R Code
+```{r code, eval=FALSE}
+# setup
+setwd("~/Desktop/Coursera"); set.seed(0)
+library(tidyverse); library(quanteda); library(quanteda.textplots)
+library(ngram); library(textclean); library(sentimentr)
+
+# loading_data
+processFile <- function(path){
+        txts <- scan(path, what = character(), 
+                     sep = "\n", blank.lines.skip = TRUE,
+                     skipNul = TRUE, quiet = TRUE)
+        return(txts)
+}
+
+file_paths <- list.files(path = "./final/en_US", full.names = TRUE)
+file_list <- lapply(file_paths, processFile)
+file_names <- c("blogs", "news", "twitter")
+names(file_list) <- file_names
+
+# file paths
+file_paths
+
+# wordcount
+wordcountFile <- function(file){
+        n <- wordcount(file)
+        n_sum <- sum(n, na.rm = TRUE)
+        return(n_sum)
+}
+wordcount_list <- lapply(file_list, wordcountFile)
+wordcount_list
+
+# linecount
+linecount_list <- lapply(file_list, length)
+linecount_list
+
+# 10% sampling and tokenizing
+tokenizeFile <- function(files, p = 0.1){
+        docs <- unlist(files)
+        size <- length(docs) * p
+        docs <- sample(docs, size = size)
+        docs <- replace_non_ascii(docs)
+        corp <- corpus(docs)
+        toks <- tokens(corp, remove_punct = TRUE)
+        
+        # removing bad words
+        pwords <- lexicon::profanity_alvarez
+        toks <- tokens_remove(toks, pattern = pwords)
+        return(toks)
+}
+
+toks <- tokenizeFile(file_list, p = 0.1)
+toks
+
+# constructing a document-feature matrix
+dfmat <- dfm(toks)
+topwords <- topfeatures(dfmat, 1000)
+df1 <- data.frame(topwords) %>%
+        mutate(proportion = topwords/sum(dfmat)) %>%
+        mutate(cum_sum = cumsum(proportion))
+head(df1); tail(df1) # Top 1000 words cover 70% of all words instances
+plot(topwords, main = "Top 1,000 Word Count")
+textplot_wordcloud(dfmat, min_count = 1000)
+
+# generating n-grams (n = 2)
+toks_ngrams <- tokens_ngrams(toks, n = 2)
+dfmat_ngrams <- dfm(toks_ngrams)
+topngrams <- topfeatures(dfmat_ngrams, 1000)
+df2 <- data.frame(topngrams) %>%
+        mutate(proportion = topngrams/sum(dfmat_ngrams)) %>%
+        mutate(cum_sum = cumsum(proportion))
+head(df2); tail(df2)
+plot(topngrams, main = "Top 1,000 Bigram Count")
+```
